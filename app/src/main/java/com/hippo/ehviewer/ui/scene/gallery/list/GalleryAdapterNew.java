@@ -41,6 +41,7 @@ import com.hippo.ehviewer.R;
 import com.hippo.ehviewer.Settings;
 import com.hippo.ehviewer.client.EhCacheKeyFactory;
 import com.hippo.ehviewer.client.EhUtils;
+import com.hippo.ehviewer.EhDB;
 import com.hippo.ehviewer.client.data.GalleryInfo;
 import com.hippo.ehviewer.download.DownloadManager;
 import com.hippo.ehviewer.ui.scene.TransitionNameFactory;
@@ -262,7 +263,17 @@ abstract class GalleryAdapterNew extends RecyclerView.Adapter<GalleryAdapterNew.
                     holder.simpleLanguage.setVisibility(View.VISIBLE);
                 }
                 holder.favourite.setVisibility((mShowFavourite && gi.favoriteSlot >= -1 && gi.favoriteSlot <= 10) ? View.VISIBLE : View.GONE);
-                holder.downloaded.setVisibility(mDownloadManager.containDownloadInfo(gi.gid) ? View.VISIBLE : View.GONE);
+                boolean isLocalDownloaded = mDownloadManager.containDownloadInfo(gi.gid);
+                boolean isRemotePushed = !isLocalDownloaded && EhDB.isRemotePushed(gi.gid);
+                if (isLocalDownloaded) {
+                    holder.downloaded.setVisibility(View.VISIBLE);
+                    // Keep default download icon
+                } else if (isRemotePushed) {
+                    holder.downloaded.setVisibility(View.VISIBLE);
+                    holder.downloaded.setImageResource(R.drawable.v_cloud_primary_x24);
+                } else {
+                    holder.downloaded.setVisibility(View.GONE);
+                }
                 break;
             }
             case TYPE_GRID: {

@@ -423,6 +423,7 @@ public final class GalleryListScene extends BaseScene
             onRestore(savedInstanceState);
         }
         showReadProgress = Settings.getShowReadProgress();
+        EventBus.getDefault().register(this);
     }
 
     public void onInit() {
@@ -1152,22 +1153,27 @@ public final class GalleryListScene extends BaseScene
      */
     @Subscribe(threadMode = ThreadMode.MAIN)
     public void onQuickSearchDataChanged(SomethingNeedRefresh refresh) {
-        if (!refresh.isBookmarkDrawNeed()) {
-            return;
+        if (refresh.isBookmarkDrawNeed()) {
+            LayoutInflater inflater = getLayoutInflater();
+            bookmarksView = bookmarksViewBuild(inflater);
+            if (subscriptionView == null) {
+                subscriptionView = subscriptionViewBuild(inflater);
+            }
+            List<View> views = new ArrayList<>();
+
+            views.add(bookmarksView);
+            views.add(subscriptionView);
+
+            DrawViewPagerAdapter pagerAdapter = new DrawViewPagerAdapter(views);
+
+            drawPager.setAdapter(pagerAdapter);
         }
-        LayoutInflater inflater = getLayoutInflater();
-        bookmarksView = bookmarksViewBuild(inflater);
-        if (subscriptionView == null) {
-            subscriptionView = subscriptionViewBuild(inflater);
+        if (refresh.isGalleryListNeedRefresh()) {
+            // Refresh gallery list adapter to update icons (download/cloud)
+            if (mAdapter != null) {
+                mAdapter.notifyDataSetChanged();
+            }
         }
-        List<View> views = new ArrayList<>();
-
-        views.add(bookmarksView);
-        views.add(subscriptionView);
-
-        DrawViewPagerAdapter pagerAdapter = new DrawViewPagerAdapter(views);
-
-        drawPager.setAdapter(pagerAdapter);
     }
 
     private boolean checkDoubleClickExit() {

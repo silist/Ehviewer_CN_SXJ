@@ -1519,4 +1519,75 @@ public class Settings {
     public static void putUpdateTime(long updateTime) {
         putLong(KEY_LAST_UPDATE_TIME,updateTime);
     }
+
+    /********************
+     ****** Remote Download
+     ********************/
+    public static final String KEY_DOWNLOAD_MODE = "download_mode";
+    public static final String DOWNLOAD_MODE_LOCAL = "local";
+    public static final String DOWNLOAD_MODE_REMOTE = "remote";
+    private static final String DEFAULT_DOWNLOAD_MODE = DOWNLOAD_MODE_LOCAL;
+
+    public static String getDownloadMode() {
+        return getString(KEY_DOWNLOAD_MODE, DEFAULT_DOWNLOAD_MODE);
+    }
+
+    public static void putDownloadMode(String mode) {
+        putString(KEY_DOWNLOAD_MODE, mode);
+    }
+
+    public static final String KEY_REMOTE_NAS_ADDRESS = "remote_nas_address";
+    private static final String DEFAULT_REMOTE_NAS_ADDRESS = "";
+
+    public static String getRemoteNasAddress() {
+        return getString(KEY_REMOTE_NAS_ADDRESS, DEFAULT_REMOTE_NAS_ADDRESS);
+    }
+
+    public static void putRemoteNasAddress(String address) {
+        putString(KEY_REMOTE_NAS_ADDRESS, address);
+    }
+
+    public static final String KEY_REMOTE_NAS_PORT = "remote_nas_port";
+    private static final int DEFAULT_REMOTE_NAS_PORT = 8080;
+
+    public static int getRemoteNasPort() {
+        return getInt(KEY_REMOTE_NAS_PORT, DEFAULT_REMOTE_NAS_PORT);
+    }
+
+    public static void putRemoteNasPort(int port) {
+        putInt(KEY_REMOTE_NAS_PORT, port);
+    }
+
+    public static final String KEY_REMOTE_API_TOKEN = "remote_api_token";
+    private static final String DEFAULT_REMOTE_API_TOKEN = "";
+
+    public static String getRemoteApiToken() {
+        return getString(KEY_REMOTE_API_TOKEN, DEFAULT_REMOTE_API_TOKEN);
+    }
+
+    public static void putRemoteApiToken(String token) {
+        putString(KEY_REMOTE_API_TOKEN, token);
+    }
+
+    public static final String KEY_REMOTE_COOKIE_SYNCED = "remote_cookie_synced";
+    private static final boolean DEFAULT_REMOTE_COOKIE_SYNCED = false;
+
+    public static boolean isRemoteCookieSynced() {
+        return getBoolean(KEY_REMOTE_COOKIE_SYNCED, DEFAULT_REMOTE_COOKIE_SYNCED);
+    }
+
+    public static void putRemoteCookieSynced(boolean synced) {
+        putBoolean(KEY_REMOTE_COOKIE_SYNCED, synced);
+    }
+
+    public static final String KEY_REMOTE_COOKIE_SYNC_TIME = "remote_cookie_sync_time";
+    private static final long DEFAULT_REMOTE_COOKIE_SYNC_TIME = 0L;
+
+    public static long getRemoteCookieSyncTime() {
+        return getLong(KEY_REMOTE_COOKIE_SYNC_TIME, DEFAULT_REMOTE_COOKIE_SYNC_TIME);
+    }
+
+    public static void putRemoteCookieSyncTime(long time) {
+        putLong(KEY_REMOTE_COOKIE_SYNC_TIME, time);
+    }
 }

@@ -32,7 +32,7 @@ public class EhDaoGenerator {
     private static final String OUT_DIR = "app/src/main/java";
     private static final String DELETE_DIR = OUT_DIR+"/com/hippo/ehviewer/dao";
 
-    private static final int VERSION = 6;
+    private static final int VERSION = 7;
 
     private static final String DOWNLOAD_INFO_PATH = OUT_DIR+"/com/hippo/ehviewer/dao/DownloadInfo.java";
     private static final String HISTORY_INFO_PATH = OUT_DIR+"/com/hippo/ehviewer/dao/HistoryInfo.java";
@@ -42,6 +42,7 @@ public class EhDaoGenerator {
     private static final String FILTER_PATH = OUT_DIR+"/com/hippo/ehviewer/dao/Filter.java";
     private static final String BLACKLIST_PATH = OUT_DIR+"/com/hippo/ehviewer/dao/BlackList.java";
     private static final String GALLERY_TAG_PATH = OUT_DIR+"/com/hippo/ehviewer/dao/GalleryTags.java";
+    private static final String REMOTE_PUSH_INFO_PATH = OUT_DIR+"/com/hippo/ehviewer/dao/RemotePushInfo.java";
 
 
     public static void generate() throws Exception {
@@ -65,9 +66,11 @@ public class EhDaoGenerator {
         addLocalFavorites(schema);
         addBookmarks(schema);
         addFilter(schema);
+        addRemotePushInfo(schema);
         new DaoGenerator().generateAll(schema, OUT_DIR);
 
         adjustGalleryTags();
+        adjustRemotePushInfo();
         adjustDownloadInfo();
         adjustHistoryInfo();
         adjustQuickSearch();
@@ -699,6 +702,66 @@ public class EhDaoGenerator {
                 "\t}");
 
         FileWriter fileWriter = new FileWriter(FILTER_PATH);
+        fileWriter.write(javaClass.toString());
+        fileWriter.close();
+    }
+
+    // Remote push info for tracking downloads pushed to NAS
+    private static void addRemotePushInfo(Schema schema) {
+        Entity entity = schema.addEntity("RemotePushInfo");
+        entity.setTableName("REMOTE_PUSH");
+        entity.setClassNameDao("RemotePushInfoDao");
+        entity.addLongProperty("gid").primaryKey().notNull();
+        entity.addStringProperty("token");
+        entity.addStringProperty("title");
+        entity.addStringProperty("titleJpn");
+        entity.addStringProperty("thumb");
+        entity.addIntProperty("category");
+        entity.addStringProperty("posted");
+        entity.addStringProperty("uploader");
+        entity.addFloatProperty("rating");
+        entity.addLongProperty("pushTime").notNull();
+    }
+
+    private static void adjustRemotePushInfo() throws Exception {
+        JavaClassSource javaClass = Roaster.parse(JavaClassSource.class, new File(REMOTE_PUSH_INFO_PATH));
+
+        // Set all fields public
+        javaClass.getField("gid").setPublic();
+        javaClass.getField("token").setPublic();
+        javaClass.getField("title").setPublic();
+        javaClass.getField("titleJpn").setPublic();
+        javaClass.getField("thumb").setPublic();
+        javaClass.getField("category").setPublic();
+        javaClass.getField("posted").setPublic();
+        javaClass.getField("uploader").setPublic();
+        javaClass.getField("rating").setPublic();
+        javaClass.getField("pushTime").setPublic();
+
+        // Add toString method
+        javaClass.addMethod("\t@Override\n" +
+                "\tpublic String toString() {\n" +
+                "\t\treturn title;\n" +
+                "\t}");
+
+        // Add toJson method
+        javaClass.addImport("com.alibaba.fastjson.JSONObject");
+        javaClass.addMethod("\tpublic JSONObject toJson() {\n" +
+                "\t\tJSONObject object = new JSONObject();\n" +
+                "\t\tobject.put(\"gid\", gid);\n" +
+                "\t\tobject.put(\"token\", token);\n" +
+                "\t\tobject.put(\"title\", title);\n" +
+                "\t\tobject.put(\"titleJpn\", titleJpn);\n" +
+                "\t\tobject.put(\"thumb\", thumb);\n" +
+                "\t\tobject.put(\"category\", category);\n" +
+                "\t\tobject.put(\"posted\", posted);\n" +
+                "\t\tobject.put(\"uploader\", uploader);\n" +
+                "\t\tobject.put(\"rating\", rating);\n" +
+                "\t\tobject.put(\"pushTime\", pushTime);\n" +
+                "\t\treturn object;\n" +
+                "\t}");
+
+        FileWriter fileWriter = new FileWriter(REMOTE_PUSH_INFO_PATH);
         fileWriter.write(javaClass.toString());
         fileWriter.close();
     }

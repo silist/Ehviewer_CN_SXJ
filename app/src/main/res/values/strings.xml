@@ -58,7 +58,7 @@
     <string name="settings_eh_system_theme">系统主题</string>
 
 
-    <string name="app_name">EhViewer</string>
+    <string name="app_name">ChViewer</string>
 
     <string name="site_e" translatable="false">e-hentai</string>
     <string name="site_ex" translatable="false">exhentai</string>
@@ -441,6 +441,10 @@
     <string name="scene_download_title">%s Galleries - %s</string>
     <string name="scene_download_title_new">%s(%s)</string>
     <string name="no_download_info">Download items will be shown here</string>
+    <string name="download_tab_local">本地下载</string>
+    <string name="download_tab_remote">远程推送</string>
+    <string name="no_remote_push_info">远程推送记录将显示在这里</string>
+    <string name="operation_not_supported_for_remote">此操作不适用于远程推送记录</string>
     <string name="download_state_none">Idle</string>
     <string name="download_state_wait">Waiting</string>
     <string name="download_state_downloading">Downloading</string>
@@ -1064,4 +1068,32 @@
     <string name="imported_archive_category">Local Import</string>
     <!-- TagSelectActivity -->
     <string name="tag_search_entrance">Tag Selector</string>
+
+    <!-- Remote Download Settings -->
+    <string name="settings_remote_download">Remote Download</string>
+    <string name="settings_download_mode">Download Mode</string>
+    <string name="settings_download_mode_summary">Choose local or remote (NAS) download</string>
+    <string name="settings_remote_config">Remote Configuration</string>
+    <string name="settings_remote_nas_address">NAS Address</string>
+    <string name="settings_remote_nas_address_dialog">Enter NAS IP address or hostname</string>
+    <string name="settings_remote_nas_port">API Port</string>
+    <string name="settings_remote_nas_port_dialog">Enter API port number</string>
+    <string name="settings_remote_api_token">API Token</string>
+    <string name="settings_remote_api_token_dialog">Enter API authentication token</string>
+    <string name="settings_remote_test_connection">Test Connection</string>
+    <string name="settings_remote_test_connection_summary">Tap to verify NAS connection</string>
+    <string name="settings_remote_cookie_sync">Cookie Sync</string>
+    <string name="settings_remote_cookie_sync_status">Sync Status</string>
+    <string name="settings_remote_sync_cookie">Sync Cookie</string>
+    <string name="settings_remote_sync_cookie_summary">Sync EH cookies to NAS for authentication</string>
+    <string name="settings_remote_not_synced">Not synced</string>
+    <string name="settings_remote_synced">Synced (%s)</string>
+    <string name="settings_remote_testing">Testing...</string>
+    <string name="settings_remote_connection_success">Connection successful</string>
+    <string name="settings_remote_syncing">Syncing...</string>
+    <string name="settings_remote_sync_success">Cookie sync successful</string>
+    <string name="download_mode_local">Local</string>
+    <string name="download_mode_remote">Remote</string>
+    <string name="settings_remote_nas_address_hint">e.g. 192.168.1.100</string>
+    <string name="settings_remote_api_token_hint">Authentication token</string>
 </resources>

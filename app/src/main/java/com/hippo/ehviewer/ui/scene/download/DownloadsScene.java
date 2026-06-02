@@ -66,6 +66,7 @@ import com.github.amlcurran.showcaseview.SimpleShowcaseEventListener;
 import com.github.amlcurran.showcaseview.targets.PointTarget;
 import com.github.amlcurran.showcaseview.targets.ViewTarget;
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
+import com.google.android.material.tabs.TabLayout;
 import com.h6ah4i.android.widget.advrecyclerview.animator.DraggableItemAnimator;
 import com.h6ah4i.android.widget.advrecyclerview.animator.GeneralItemAnimator;
 import com.h6ah4i.android.widget.advrecyclerview.draggable.RecyclerViewDragDropManager;
@@ -88,6 +89,7 @@ import com.hippo.ehviewer.client.EhUtils;
 import com.hippo.ehviewer.client.data.GalleryInfo;
 import com.hippo.ehviewer.dao.DownloadInfo;
 import com.hippo.ehviewer.dao.DownloadLabel;
+import com.hippo.ehviewer.dao.RemotePushInfo;
 import com.hippo.ehviewer.download.DownloadManager;
 import com.hippo.ehviewer.download.DownloadService;
 import com.hippo.ehviewer.event.SomethingNeedRefresh;
@@ -98,8 +100,11 @@ import com.hippo.ehviewer.ui.GalleryActivity;
 import com.hippo.ehviewer.ui.MainActivity;
 import com.hippo.ehviewer.ui.annotation.ViewLifeCircle;
 import com.hippo.ehviewer.ui.scene.ToolbarScene;
+import com.hippo.ehviewer.ui.scene.gallery.detail.GalleryDetailScene;
+import com.hippo.scene.Announcer;
 import com.hippo.ehviewer.ui.scene.download.part.DownloadAdapter;
 import com.hippo.ehviewer.ui.scene.download.part.MyPageChangeListener;
+import com.hippo.ehviewer.ui.scene.download.part.RemotePushAdapter;
 import com.hippo.ehviewer.widget.MyEasyRecyclerView;
 import com.hippo.ehviewer.widget.SearchBar;
 import com.hippo.lib.yorozuya.AssertUtils;
@@ -227,6 +232,15 @@ public class DownloadsScene extends ToolbarScene
     @Nullable
     private Spinner mCategorySpinner;
     private int mSelectedCategory = EhUtils.ALL_CATEGORY;
+
+    // Tab for local/remote downloads
+    @Nullable
+    private TabLayout mTabLayout;
+    private int mCurrentTab = 0; // 0 = local, 1 = remote
+    @Nullable
+    private List<RemotePushInfo> mRemotePushList;
+    @Nullable
+    private RemotePushAdapter mRemotePushAdapter;
 
     @NonNull
     private final ActivityResultLauncher<Intent> galleryActivityLauncher = registerForActivityResult(
@@ -411,6 +425,24 @@ public class DownloadsScene extends ToolbarScene
 
         Context context = getEHContext();
         assert context != null;
+
+        // Initialize TabLayout for local/remote switch
+        mTabLayout = (TabLayout) ViewUtils.$$(view, R.id.download_tab_layout);
+        mTabLayout.addTab(mTabLayout.newTab().setText(getString(R.string.download_tab_local)));
+        mTabLayout.addTab(mTabLayout.newTab().setText(getString(R.string.download_tab_remote)));
+        mTabLayout.addOnTabSelectedListener(new TabLayout.OnTabSelectedListener() {
+            @Override
+            public void onTabSelected(TabLayout.Tab tab) {
+                mCurrentTab = tab.getPosition();
+                updateListForCurrentTab();
+            }
+
+            @Override
+            public void onTabUnselected(TabLayout.Tab tab) {}
+
+            @Override
+            public void onTabReselected(TabLayout.Tab tab) {}
+        });
 
         mCategorySpinner = (Spinner) ViewUtils.$$(view, R.id.category_spinner);
         // Initialize category spinner
@@ -962,6 +994,21 @@ public class DownloadsScene extends ToolbarScene
             recyclerView.toggleItemChecked(position);
             return true;
         } else {
+            // Handle remote push tab
+            if (mCurrentTab == 1) {
+                if (mRemotePushList == null || position < 0 || position >= mRemotePushList.size()) {
+                    return false;
+                }
+                RemotePushInfo info = mRemotePushList.get(position);
+                // Open gallery detail page with gid and token
+                Bundle args = new Bundle();
+                args.putString(GalleryDetailScene.KEY_ACTION, GalleryDetailScene.ACTION_GID_TOKEN);
+                args.putLong(GalleryDetailScene.KEY_GID, info.getGid());
+                args.putString(GalleryDetailScene.KEY_TOKEN, info.getToken());
+                startScene(new Announcer(GalleryDetailScene.class).setArgs(args));
+                return true;
+            }
+
             List<DownloadInfo> list = mList;
             if (list == null) {
                 return false;
@@ -1069,6 +1116,18 @@ public class DownloadsScene extends ToolbarScene
         if (0 == position) {
             recyclerView.checkAll();
         } else {
+            // Handle remote push tab differently
+            if (mCurrentTab == 1) {
+                // Remote push tab - only support delete
+                if (position == 3) { // Delete
+                    handleRemotePushDelete(context, recyclerView);
+                } else {
+                    // Other actions not applicable for remote push
+                    Toast.makeText(context, R.string.operation_not_supported_for_remote, Toast.LENGTH_SHORT).show();
+                }
+                return;
+            }
+
             List<DownloadInfo> list = mList;
             if (list == null) {
                 return;
@@ -1987,6 +2046,98 @@ public class DownloadsScene extends ToolbarScene
                 view.outOfCustomChoiceMode();
             }
         }
+    }
+
+    private void updateListForCurrentTab() {
+        if (mCurrentTab == 0) {
+            // Local downloads - show category spinner, use original adapter
+            if (mCategorySpinner != null) {
+                mCategorySpinner.setVisibility(View.VISIBLE);
+            }
+            if (mRecyclerView != null && mAdapter != null) {
+                mRecyclerView.setAdapter(mAdapter);
+            }
+            updateForLabel();
+            updateView();
+        } else {
+            // Remote push records - hide category spinner, use remote adapter
+            if (mCategorySpinner != null) {
+                mCategorySpinner.setVisibility(View.GONE);
+            }
+            if (mRemotePushAdapter == null) {
+                mRemotePushAdapter = new RemotePushAdapter(requireContext());
+            }
+            if (mRecyclerView != null) {
+                mRecyclerView.setAdapter(mRemotePushAdapter);
+            }
+            // Load remote push data
+            new Thread(() -> {
+                List<RemotePushInfo> list = EhDB.getAllRemotePushInfo();
+                if (getActivity() != null) {
+                    getActivity().runOnUiThread(() -> {
+                        mRemotePushList = list;
+                        if (mRemotePushAdapter != null) {
+                            mRemotePushAdapter.setData(list);
+                        }
+                        updateViewForRemote();
+                    });
+                }
+            }).start();
+        }
+    }
+
+    @SuppressLint("NotifyDataSetChanged")
+    private void updateViewForRemote() {
+        if (mViewTransition == null) {
+            return;
+        }
+        boolean hasData = mRemotePushList != null && !mRemotePushList.isEmpty();
+        if (hasData) {
+            mViewTransition.showView(0);
+        } else {
+            mViewTransition.showView(1);
+            TextView tip = getView().findViewById(R.id.tip);
+            if (tip != null) {
+                tip.setText(getString(R.string.no_remote_push_info));
+            }
+        }
+    }
+
+    private void handleRemotePushDelete(Context context, MyEasyRecyclerView recyclerView) {
+        if (mRemotePushList == null || mRemotePushList.isEmpty()) {
+            return;
+        }
+
+        LongList gidList = new LongList();
+        SparseBooleanArray stateArray = recyclerView.getCheckedItemPositions();
+        for (int i = 0, n = stateArray.size(); i < n; i++) {
+            if (stateArray.valueAt(i)) {
+                int pos = stateArray.keyAt(i);
+                if (pos >= 0 && pos < mRemotePushList.size()) {
+                    gidList.add(mRemotePushList.get(pos).getGid());
+                }
+            }
+        }
+
+        if (gidList.isEmpty()) {
+            return;
+        }
+
+        new AlertDialog.Builder(context)
+                .setTitle(R.string.delete)
+                .setMessage(getString(R.string.download_remove_dialog_message_2, gidList.size()))
+                .setPositiveButton(android.R.string.ok, (dialog, which) -> {
+                    // Delete from database
+                    for (int i = 0; i < gidList.size(); i++) {
+                        EhDB.deleteRemotePushInfo(gidList.get(i));
+                    }
+                    // Refresh list
+                    updateListForCurrentTab();
+                    // Exit choice mode
+                    recyclerView.outOfCustomChoiceMode();
+                })
+                .setNegativeButton(android.R.string.cancel, null)
+                .show();
     }
 
     private void filterByCategory() {

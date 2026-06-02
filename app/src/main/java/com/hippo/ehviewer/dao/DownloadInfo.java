@@ -18,7 +18,9 @@ public class DownloadInfo extends GalleryInfo {
 	public int legacy;
 	public long time;
 	public String label;
-	public String archiveUri; // URI for imported archive files
+	public String archiveUri;  // For imported local archives
+	public long fileSize;      // Download size in bytes
+
 	public static final Creator<DownloadInfo> CREATOR = new Creator<DownloadInfo>() {
 		@Override
 		public DownloadInfo createFromParcel(Parcel source) {
@@ -43,8 +45,6 @@ public class DownloadInfo extends GalleryInfo {
 	public int finished;
 	public int downloaded;
 	public int total;
-	public long fileSize = -1; // 文件夹总大小（字节），-1表示未计算
-
 
 	@Generated
 	public DownloadInfo() {
@@ -57,7 +57,7 @@ public class DownloadInfo extends GalleryInfo {
 	@Generated
 	public DownloadInfo(long gid, String token, String title, String titleJpn, String thumb, int category,
 			String posted, String uploader, float rating, String simpleLanguage, int state, int legacy, long time,
-			String label, String archiveUri) {
+			String label) {
 		this.gid = gid;
 		this.token = token;
 		this.title = title;
@@ -72,7 +72,6 @@ public class DownloadInfo extends GalleryInfo {
 		this.legacy = legacy;
 		this.time = time;
 		this.label = label;
-		this.archiveUri = archiveUri;
 	}
 
 	public long getGid() {
@@ -187,14 +186,6 @@ public class DownloadInfo extends GalleryInfo {
 		this.label = label;
 	}
 
-	public String getArchiveUri() {
-		return archiveUri;
-	}
-
-	public void setArchiveUri(String archiveUri) {
-		this.archiveUri = archiveUri;
-	}
-
 	@Override
 	public int describeContents() {
 		return 0;
@@ -208,6 +199,7 @@ public class DownloadInfo extends GalleryInfo {
 		dest.writeLong(this.time);
 		dest.writeString(this.label);
 		dest.writeString(this.archiveUri);
+		dest.writeLong(this.fileSize);
 	}
 
 	protected DownloadInfo(Parcel in) {
@@ -217,6 +209,7 @@ public class DownloadInfo extends GalleryInfo {
 		this.time = in.readLong();
 		this.label = in.readString();
 		this.archiveUri = in.readString();
+		this.fileSize = in.readLong();
 	}
 
 	public DownloadInfo(GalleryInfo galleryInfo) {
@@ -258,6 +251,7 @@ public class DownloadInfo extends GalleryInfo {
 		jsonObject.put("time", time);
 		jsonObject.put("total", total);
 		jsonObject.put("archiveUri", archiveUri);
+		jsonObject.put("fileSize", fileSize);
 		return jsonObject;
 	}
 
@@ -273,6 +267,7 @@ public class DownloadInfo extends GalleryInfo {
 		downloadInfo.time = object.getLongValue("time");
 		downloadInfo.total = object.getIntValue("total");
 		downloadInfo.archiveUri = object.getString("archiveUri");
+		downloadInfo.fileSize = object.getLongValue("fileSize");
 		return downloadInfo;
 	}
 

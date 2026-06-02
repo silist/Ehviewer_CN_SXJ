@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  ~ Remote Download Settings
+  ~ Configuration for NAS remote download functionality
+  -->
+<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+
+    <com.hippo.preference.ListPreference
+        android:key="download_mode"
+        android:title="@string/settings_download_mode"
+        android:summary="@string/settings_download_mode_summary"
+        android:defaultValue="local"
+        app:entries="@array/download_mode_entries"
+        app:entryValues="@array/download_mode_values"
+        app:iconSpaceReserved="false" />
+
+    <PreferenceCategory
+        android:key="remote_settings"
+        android:title="@string/settings_remote_config"
+        app:allowDividerAbove="true">
+
+        <Preference
+            android:key="remote_nas_address"
+            android:title="@string/settings_remote_nas_address"
+            app:iconSpaceReserved="false" />
+
+        <Preference
+            android:key="remote_nas_port"
+            android:title="@string/settings_remote_nas_port"
+            app:iconSpaceReserved="false" />
+
+        <Preference
+            android:key="remote_api_token"
+            android:title="@string/settings_remote_api_token"
+            app:iconSpaceReserved="false" />
+
+        <Preference
+            android:key="test_connection"
+            android:title="@string/settings_remote_test_connection"
+            android:summary="@string/settings_remote_test_connection_summary"
+            app:iconSpaceReserved="false" />
+
+    </PreferenceCategory>
+
+    <PreferenceCategory
+        android:key="cookie_sync"
+        android:title="@string/settings_remote_cookie_sync"
+        app:allowDividerAbove="true">
+
+        <Preference
+            android:key="cookie_sync_status"
+            android:title="@string/settings_remote_cookie_sync_status"
+            android:selectable="false"
+            app:iconSpaceReserved="false" />
+
+        <Preference
+            android:key="sync_cookie"
+            android:title="@string/settings_remote_sync_cookie"
+            android:summary="@string/settings_remote_sync_cookie_summary"
+            app:iconSpaceReserved="false" />
+
+    </PreferenceCategory>
+
+</PreferenceScreen>

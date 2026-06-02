@@ -5,6 +5,7 @@ public class SomethingNeedRefresh {
     private boolean downloadLabelDrawNeed = false;
 
     private boolean downloadInfoNeed = false;
+    private boolean galleryListNeedRefresh = false;
 
     public SomethingNeedRefresh(){}
 
@@ -32,6 +33,14 @@ public class SomethingNeedRefresh {
         this.downloadInfoNeed = downloadInfoNeed;
     }
 
+    public boolean isGalleryListNeedRefresh() {
+        return galleryListNeedRefresh;
+    }
+
+    public void setGalleryListNeedRefresh(boolean galleryListNeedRefresh) {
+        this.galleryListNeedRefresh = galleryListNeedRefresh;
+    }
+
     public static SomethingNeedRefresh bookmarkDrawNeedRefresh(){
         SomethingNeedRefresh refresh = new SomethingNeedRefresh();
         refresh.setBookmarkDrawNeed(true);
@@ -50,5 +59,10 @@ public class SomethingNeedRefresh {
         return refresh;
     }
 
+    public static SomethingNeedRefresh galleryListNeedRefresh(){
+        SomethingNeedRefresh refresh = new SomethingNeedRefresh();
+        refresh.setGalleryListNeedRefresh(true);
+        return refresh;
+    }
 
 }

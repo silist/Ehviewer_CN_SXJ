@@ -54,6 +54,8 @@ import com.hippo.ehviewer.dao.LocalFavoriteInfo;
 import com.hippo.ehviewer.dao.LocalFavoritesDao;
 import com.hippo.ehviewer.dao.QuickSearch;
 import com.hippo.ehviewer.dao.QuickSearchDao;
+import com.hippo.ehviewer.dao.RemotePushInfo;
+import com.hippo.ehviewer.dao.RemotePushInfoDao;
 import com.hippo.ehviewer.download.DownloadManager;
 import com.hippo.util.ExceptionUtils;
 import com.hippo.util.SqlUtils;
@@ -76,6 +78,8 @@ import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 import java.util.Objects;
+import java.util.HashSet;
+import java.util.Set;
 
 public class EhDB {
 
@@ -1075,5 +1079,80 @@ public class EhDB {
         bundle.putInt(LOADING_STATUS, DB_LOADING);
         message.setData(bundle);
         handler.sendMessage(message);
+    }
+
+    // ==================== Remote Push Info Operations ====================
+
+    /**
+     * 获取所有远程推送记录
+     */
+    public static synchronized List<RemotePushInfo> getAllRemotePushInfo() {
+        RemotePushInfoDao dao = sDaoSession.getRemotePushInfoDao();
+        return dao.queryBuilder().orderDesc(RemotePushInfoDao.Properties.PushTime).list();
+    }
+
+    /**
+     * 检查是否已推送
+     */
+    public static synchronized boolean isRemotePushed(long gid) {
+        RemotePushInfoDao dao = sDaoSession.getRemotePushInfoDao();
+        return dao.queryBuilder()
+                .where(RemotePushInfoDao.Properties.Gid.eq(gid))
+                .count() > 0;
+    }
+
+    /**
+     * 保存远程推送记录
+     */
+    public static synchronized void putRemotePushInfo(GalleryInfo galleryInfo) {
+        RemotePushInfoDao dao = sDaoSession.getRemotePushInfoDao();
+        RemotePushInfo info = dao.load(galleryInfo.gid);
+        if (info == null) {
+            info = new RemotePushInfo();
+            info.gid = galleryInfo.gid;
+            info.token = galleryInfo.token;
+            info.title = galleryInfo.title;
+            info.titleJpn = galleryInfo.titleJpn;
+            info.thumb = galleryInfo.thumb;
+            info.category = galleryInfo.category;
+            info.posted = galleryInfo.posted;
+            info.uploader = galleryInfo.uploader;
+            info.rating = galleryInfo.rating;
+            info.pushTime = System.currentTimeMillis();
+            dao.insert(info);
+        } else {
+            // 更新推送时间
+            info.pushTime = System.currentTimeMillis();
+            dao.update(info);
+        }
+    }
+
+    /**
+     * 删除远程推送记录
+     */
+    public static synchronized void deleteRemotePushInfo(long gid) {
+        RemotePushInfoDao dao = sDaoSession.getRemotePushInfoDao();
+        dao.deleteByKey(gid);
+    }
+
+    /**
+     * 清除所有远程推送记录
+     */
+    public static synchronized void clearRemotePushInfo() {
+        RemotePushInfoDao dao = sDaoSession.getRemotePushInfoDao();
+        dao.deleteAll();
+    }
+
+    /**
+     * 获取所有已推送的 gid 集合
+     */
+    public static synchronized Set<Long> getRemotePushedGids() {
+        RemotePushInfoDao dao = sDaoSession.getRemotePushInfoDao();
+        List<RemotePushInfo> list = dao.queryBuilder().list();
+        Set<Long> gids = new HashSet<>();
+        for (RemotePushInfo info : list) {
+            gids.add(info.gid);
+        }
+        return gids;
     }
 }

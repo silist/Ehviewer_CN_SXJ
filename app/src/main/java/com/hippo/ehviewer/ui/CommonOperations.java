@@ -17,7 +17,11 @@
 package com.hippo.ehviewer.ui;
 
 import android.app.Activity;
+import android.content.Context;
 import android.content.Intent;
+import android.content.SharedPreferences;
+import android.text.TextUtils;
+import android.widget.Toast;
 
 import com.hippo.app.ListCheckBoxDialogBuilder;
 import com.hippo.ehviewer.EhApplication;
@@ -26,14 +30,18 @@ import com.hippo.ehviewer.R;
 import com.hippo.ehviewer.Settings;
 import com.hippo.ehviewer.client.EhClient;
 import com.hippo.ehviewer.client.EhRequest;
+import com.hippo.ehviewer.client.RemoteDownloadClient;
 import com.hippo.ehviewer.client.data.GalleryInfo;
 import com.hippo.ehviewer.dao.DownloadLabel;
 import com.hippo.ehviewer.download.DownloadManager;
 import com.hippo.ehviewer.download.DownloadService;
+import com.hippo.ehviewer.event.SomethingNeedRefresh;
 import com.hippo.ehviewer.ui.scene.BaseScene;
 import com.hippo.unifile.UniFile;
 import com.hippo.lib.yorozuya.IOUtils;
 import com.hippo.lib.yorozuya.collect.LongList;
+
+import org.greenrobot.eventbus.EventBus;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -134,7 +142,60 @@ public final class CommonOperations {
     }
 
     public static void startDownload(final MainActivity activity, final GalleryInfo galleryInfo, boolean forceDefault) {
+        // 检查下载模式
+        if (Settings.DOWNLOAD_MODE_REMOTE.equals(Settings.getDownloadMode())) {
+            startRemoteDownload(activity, galleryInfo);
+            return;
+        }
         startDownload(activity, Collections.singletonList(galleryInfo), forceDefault);
+    }
+
+    // 远程下载（推送到 NAS）
+    private static void startRemoteDownload(final MainActivity activity, final GalleryInfo galleryInfo) {
+        final String cookies = getCookies(activity);
+
+        new Thread(() -> {
+            RemoteDownloadClient.PushResult result = RemoteDownloadClient.INSTANCE.pushDownloadBlocking(galleryInfo, cookies);
+
+            activity.runOnUiThread(() -> {
+                if (result instanceof RemoteDownloadClient.PushResult.Success) {
+                    // 保存推送记录
+                    EhDB.putRemotePushInfo(galleryInfo);
+                    // 通知画廊列表刷新图标
+                    EventBus.getDefault().post(SomethingNeedRefresh.galleryListNeedRefresh());
+                    activity.showTip("已推送到 NAS", BaseScene.LENGTH_SHORT);
+                } else if (result instanceof RemoteDownloadClient.PushResult.Skipped) {
+                    RemoteDownloadClient.PushResult.Skipped skipped = (RemoteDownloadClient.PushResult.Skipped) result;
+                    String reason = skipped.getReason();
+                    activity.showTip("已跳过: " + (reason != null ? reason : "已存在"), BaseScene.LENGTH_SHORT);
+                } else if (result instanceof RemoteDownloadClient.PushResult.Error) {
+                    RemoteDownloadClient.PushResult.Error error = (RemoteDownloadClient.PushResult.Error) result;
+                    activity.showTip(error.getMessage(), BaseScene.LENGTH_LONG);
+                }
+            });
+        }).start();
+    }
+
+    // 获取 EH cookies
+    private static String getCookies(Context context) {
+        SharedPreferences sharedPreferences = context.getSharedPreferences("eh_info", 0);
+        String ipbMemberId = sharedPreferences.getString("ipb_member_id", "");
+        String ipbPassHash = sharedPreferences.getString("ipb_pass_hash", "");
+        String igneous = sharedPreferences.getString("igneous", "");
+
+        StringBuilder sb = new StringBuilder();
+        if (!TextUtils.isEmpty(ipbMemberId)) {
+            sb.append("ipb_member_id=").append(ipbMemberId);
+        }
+        if (!TextUtils.isEmpty(ipbPassHash)) {
+            if (sb.length() > 0) sb.append("; ");
+            sb.append("ipb_pass_hash=").append(ipbPassHash);
+        }
+        if (!TextUtils.isEmpty(igneous)) {
+            if (sb.length() > 0) sb.append("; ");
+            sb.append("igneous=").append(igneous);
+        }
+        return sb.toString();
     }
 
     // TODO Add context if activity and context are different style

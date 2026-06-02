@@ -111,4 +111,10 @@
         android:title="@string/settings_download_clean_invalid_download"
         app:allowDividerAbove="true"
         app:iconSpaceReserved="false" />
+
+    <com.hippo.ehviewer.ui.fragment.BasePreference
+        android:icon="@drawable/v_cloud_primary_x24"
+        android:title="@string/settings_remote_download"
+        app:allowDividerAbove="true"
+        app:fragment="com.hippo.ehviewer.ui.fragment.RemoteDownloadFragment" />
 </PreferenceScreen>
