@@ -443,7 +443,6 @@ public class DownloadsScene extends ToolbarScene
             @Override
             public void onTabReselected(TabLayout.Tab tab) {}
         });
-        mTabLayout.selectTab(mTabLayout.getTabAt(1)); // Default to remote tab (after listener added)
 
         mCategorySpinner = (Spinner) ViewUtils.$$(view, R.id.category_spinner);
         // Initialize category spinner
@@ -643,6 +642,11 @@ public class DownloadsScene extends ToolbarScene
             fab.setImageDrawable(ResourcesCompat.getDrawable(getResources(), R.drawable.v_mobile_hand_left_off_x24, context.getTheme()));
         }
         addAboveSnackView(mFabLayout);
+
+        // Select default tab after all views are initialized
+        if (mCurrentTab == 1 && mTabLayout != null) {
+            mTabLayout.selectTab(mTabLayout.getTabAt(1));
+        }
 
         updateView();
 
