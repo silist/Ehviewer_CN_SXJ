@@ -675,7 +675,8 @@ public class DownloadsScene extends ToolbarScene
 
     private void guideDownloadThumb() {
         MainActivity activity = getActivity2();
-        if (null == activity || !Settings.getGuideDownloadThumb() || null == mLayoutManager || null == mRecyclerView) {
+        // Skip guide for remote tab (different adapter/holder type)
+        if (null == activity || !Settings.getGuideDownloadThumb() || null == mLayoutManager || null == mRecyclerView || mCurrentTab != 0) {
             guideDownloadLabels();
             return;
         }
