@@ -236,7 +236,7 @@ public class DownloadsScene extends ToolbarScene
     // Tab for local/remote downloads
     @Nullable
     private TabLayout mTabLayout;
-    private int mCurrentTab = 0; // 0 = local, 1 = remote
+    private int mCurrentTab = 1; // 0 = local, 1 = remote (default: remote)
     @Nullable
     private List<RemotePushInfo> mRemotePushList;
     @Nullable
@@ -430,6 +430,7 @@ public class DownloadsScene extends ToolbarScene
         mTabLayout = (TabLayout) ViewUtils.$$(view, R.id.download_tab_layout);
         mTabLayout.addTab(mTabLayout.newTab().setText(getString(R.string.download_tab_local)));
         mTabLayout.addTab(mTabLayout.newTab().setText(getString(R.string.download_tab_remote)));
+        mTabLayout.selectTab(mTabLayout.getTabAt(1)); // Default to remote tab
         mTabLayout.addOnTabSelectedListener(new TabLayout.OnTabSelectedListener() {
             @Override
             public void onTabSelected(TabLayout.Tab tab) {
