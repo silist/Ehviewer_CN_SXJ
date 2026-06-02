@@ -98,6 +98,9 @@ import com.hippo.ehviewer.sync.DownloadListInfosExecutor;
 import com.hippo.ehviewer.sync.DownloadSpiderInfoExecutor;
 import com.hippo.ehviewer.ui.GalleryActivity;
 import com.hippo.ehviewer.ui.MainActivity;
+import com.hippo.ehviewer.ui.CommonOperations;
+import com.hippo.ehviewer.ui.scene.BaseScene;
+import com.hippo.ehviewer.client.RemoteDownloadClient;
 import com.hippo.ehviewer.ui.annotation.ViewLifeCircle;
 import com.hippo.ehviewer.ui.scene.ToolbarScene;
 import com.hippo.ehviewer.ui.scene.gallery.detail.GalleryDetailScene;
@@ -1124,8 +1127,10 @@ public class DownloadsScene extends ToolbarScene
         } else {
             // Handle remote push tab differently
             if (mCurrentTab == 1) {
-                // Remote push tab - only support delete
-                if (position == 3) { // Delete
+                // Remote push tab
+                if (position == 1) { // Re-push
+                    handleRemotePushRepush(context, recyclerView);
+                } else if (position == 3) { // Delete
                     handleRemotePushDelete(context, recyclerView);
                 } else {
                     // Other actions not applicable for remote push
@@ -2144,6 +2149,69 @@ public class DownloadsScene extends ToolbarScene
                 })
                 .setNegativeButton(android.R.string.cancel, null)
                 .show();
+    }
+
+    private void handleRemotePushRepush(Context context, MyEasyRecyclerView recyclerView) {
+        if (mRemotePushList == null || mRemotePushList.isEmpty()) {
+            return;
+        }
+
+        List<RemotePushInfo> toRepush = new ArrayList<>();
+        SparseBooleanArray stateArray = recyclerView.getCheckedItemPositions();
+        for (int i = 0, n = stateArray.size(); i < n; i++) {
+            if (stateArray.valueAt(i)) {
+                int pos = stateArray.keyAt(i);
+                if (pos >= 0 && pos < mRemotePushList.size()) {
+                    toRepush.add(mRemotePushList.get(pos));
+                }
+            }
+        }
+
+        if (toRepush.isEmpty()) {
+            return;
+        }
+
+        MainActivity activity = getActivity2();
+        if (activity == null) {
+            return;
+        }
+
+        // Exit choice mode first
+        recyclerView.outOfCustomChoiceMode();
+
+        // Re-push each selected item
+        new Thread(() -> {
+            final String cookies = CommonOperations.getCookies(activity);
+            int successCount = 0;
+            int failCount = 0;
+
+            for (RemotePushInfo info : toRepush) {
+                // Create a simple GalleryInfo from RemotePushInfo
+                GalleryInfo gi = new GalleryInfo();
+                gi.gid = info.getGid();
+                gi.token = info.getToken();
+                gi.title = info.getTitle();
+                gi.thumb = info.getThumb();
+
+                RemoteDownloadClient.PushResult result = RemoteDownloadClient.INSTANCE.pushDownloadBlocking(gi, cookies);
+                if (result instanceof RemoteDownloadClient.PushResult.Success) {
+                    successCount++;
+                } else if (result instanceof RemoteDownloadClient.PushResult.Error) {
+                    failCount++;
+                }
+                // Skipped doesn't count as failure
+            }
+
+            final int finalSuccessCount = successCount;
+            final int finalFailCount = failCount;
+            activity.runOnUiThread(() -> {
+                if (finalFailCount > 0) {
+                    activity.showTip(getString(R.string.repush_failed, finalFailCount + " 项"), BaseScene.LENGTH_LONG);
+                } else if (finalSuccessCount > 0) {
+                    activity.showTip(getString(R.string.repush_success), BaseScene.LENGTH_SHORT);
+                }
+            });
+        }).start();
     }
 
     private void filterByCategory() {

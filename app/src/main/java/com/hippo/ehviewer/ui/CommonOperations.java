@@ -177,7 +177,7 @@ public final class CommonOperations {
     }
 
     // 获取 EH cookies
-    private static String getCookies(Context context) {
+    public static String getCookies(Context context) {
         SharedPreferences sharedPreferences = context.getSharedPreferences("eh_info", 0);
         String ipbMemberId = sharedPreferences.getString("ipb_member_id", "");
         String ipbPassHash = sharedPreferences.getString("ipb_pass_hash", "");

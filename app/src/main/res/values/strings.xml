@@ -445,6 +445,9 @@
     <string name="download_tab_remote">远程推送</string>
     <string name="no_remote_push_info">远程推送记录将显示在这里</string>
     <string name="operation_not_supported_for_remote">此操作不适用于远程推送记录</string>
+    <string name="repush">重新推送</string>
+    <string name="repush_success">已重新推送</string>
+    <string name="repush_failed">重新推送失败: %s</string>
     <string name="download_state_none">Idle</string>
     <string name="download_state_wait">Waiting</string>
     <string name="download_state_downloading">Downloading</string>
