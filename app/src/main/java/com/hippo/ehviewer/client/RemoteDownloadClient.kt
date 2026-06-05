@@ -48,6 +48,11 @@ object RemoteDownloadClient {
         data class Error(val message: String) : TestResult()
     }
 
+    sealed class BatchCheckResult {
+        data class Success(val existingGids: Set<Long>) : BatchCheckResult()
+        data class Error(val message: String) : BatchCheckResult()
+    }
+
     // ==================== 公共 API（Java 调用的阻塞方法） ====================
 
     /**
@@ -229,5 +234,66 @@ object RemoteDownloadClient {
         } catch (e: IOException) {
             TestResult.Error("无法连接 NAS: ${e.message}")
         }
+    }
+
+    /**
+     * 批量查询 gid 是否在 ClickHouse 中有归档记录
+     */
+    suspend fun batchCheckArchived(gids: List<Long>): BatchCheckResult = withContext(Dispatchers.IO) {
+        val address = Settings.getRemoteNasAddress()
+        val port = Settings.getRemoteNasPort()
+        val token = Settings.getRemoteApiToken()
+
+        if (address.isBlank() || token.isBlank() || gids.isEmpty()) {
+            return@withContext BatchCheckResult.Error("远程下载未配置或 gid 列表为空")
+        }
+
+        val url = "http://$address:$port/api/v1/ehentai/batch-check"
+
+        val body = JSONObject().apply {
+            put("gids", gids)
+        }
+
+        val requestBody = RequestBody.create(JSON_MEDIA_TYPE, body.toString())
+
+        val request = Request.Builder()
+            .url(url)
+            .header("Authorization", "Bearer $token")
+            .header("Content-Type", "application/json")
+            .post(requestBody)
+            .build()
+
+        try {
+            val response = client.newCall(request).execute()
+
+            if (!response.isSuccessful) {
+                return@withContext when (response.code()) {
+                    401 -> BatchCheckResult.Error("API Token 无效")
+                    else -> BatchCheckResult.Error("请求失败: ${response.code()}")
+                }
+            }
+
+            val responseBody = response.body()?.string()
+                ?: return@withContext BatchCheckResult.Error("响应为空")
+
+            val json = JSONObject(responseBody)
+            val existingGidsArray = json.optJSONArray("existing_gids")
+            val existingGids = existingGidsArray?.let { arr ->
+                (0 until arr.length()).map { arr.getLong(it) }.toSet()
+            } ?: emptySet()
+
+            BatchCheckResult.Success(existingGids)
+
+        } catch (e: IOException) {
+            BatchCheckResult.Error("无法连接 NAS: ${e.message}")
+        }
+    }
+
+    /**
+     * 批量查询 gid 是否在 ClickHouse 中有归档记录（阻塞方法，供 Java 调用）
+     */
+    @JvmStatic
+    fun batchCheckArchivedBlocking(gids: List<Long>): BatchCheckResult {
+        return runBlocking { batchCheckArchived(gids) }
     }
 }
