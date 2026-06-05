@@ -250,11 +250,18 @@ object RemoteDownloadClient {
 
         val url = "http://$address:$port/api/v1/ehentai/batch-check"
 
+        // 将 Long 列表转为 JSONArray，确保精度不丢失
+        val gidsArray = org.json.JSONArray().apply {
+            gids.forEach { put(it) }
+        }
         val body = JSONObject().apply {
-            put("gids", gids)
+            put("gids", gidsArray)
         }
 
-        val requestBody = RequestBody.create(JSON_MEDIA_TYPE, body.toString())
+        val bodyString = body.toString()
+        android.util.Log.d("RemoteDownloadClient", "Request body: $bodyString")
+
+        val requestBody = RequestBody.create(JSON_MEDIA_TYPE, bodyString)
 
         val request = Request.Builder()
             .url(url)
@@ -267,6 +274,8 @@ object RemoteDownloadClient {
             val response = client.newCall(request).execute()
 
             if (!response.isSuccessful) {
+                val errorBody = response.body()?.string() ?: "no body"
+                android.util.Log.d("RemoteDownloadClient", "Error response: ${response.code()} body: $errorBody")
                 return@withContext when (response.code()) {
                     401 -> BatchCheckResult.Error("API Token 无效")
                     else -> BatchCheckResult.Error("请求失败: ${response.code()}")
