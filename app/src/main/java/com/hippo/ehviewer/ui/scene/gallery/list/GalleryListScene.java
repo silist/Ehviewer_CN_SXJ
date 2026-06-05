@@ -95,6 +95,8 @@ import com.hippo.ehviewer.dao.DownloadInfo;
 import com.hippo.ehviewer.dao.QuickSearch;
 import com.hippo.ehviewer.download.DownloadManager;
 import com.hippo.ehviewer.event.SomethingNeedRefresh;
+import com.hippo.ehviewer.client.ArchiveStatusCache;
+import com.hippo.ehviewer.client.RemoteDownloadClient;
 import com.hippo.ehviewer.ui.CommonOperations;
 import com.hippo.ehviewer.ui.GalleryActivity;
 import com.hippo.ehviewer.ui.MainActivity;
@@ -138,6 +140,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.ExecutorService;
 
 public final class GalleryListScene extends BaseScene
@@ -296,6 +299,8 @@ public final class GalleryListScene extends BaseScene
     private DownloadManager.DownloadInfoListener mDownloadInfoListener;
     private FavouriteStatusRouter mFavouriteStatusRouter;
     private FavouriteStatusRouter.Listener mFavouriteStatusRouterListener;
+    @Nullable
+    private ArchiveStatusCache mArchiveStatusCache;
 
     @Override
     public int getNavCheckedItem() {
@@ -332,6 +337,9 @@ public final class GalleryListScene extends BaseScene
         handleArgs(args);
         onUpdateUrlBuilder();
         if (null != mHelper) {
+            if (mArchiveStatusCache != null) {
+                mArchiveStatusCache.clear();
+            }
             mHelper.refresh();
         }
         setState(STATE_NORMAL);
@@ -665,8 +673,9 @@ public final class GalleryListScene extends BaseScene
         contentLayout.setHelper(mHelper);
         contentLayout.getFastScroller().setOnDragHandlerListener(this);
 
+        mArchiveStatusCache = new ArchiveStatusCache();
         mAdapter = new GalleryListAdapter(inflater, resources,
-                mRecyclerView, Settings.getListMode());
+                mRecyclerView, Settings.getListMode(), mArchiveStatusCache);
 
         mAdapter.setThumbItemClickListener(this::onThumbItemClick);
         mRecyclerView.setSelector(Ripple.generateRippleDrawable(context, !AttrResources.getAttrBoolean(context, androidx.appcompat.R.attr.isLightTheme), new ColorDrawable(Color.TRANSPARENT)));
@@ -851,6 +860,9 @@ public final class GalleryListScene extends BaseScene
 
         mUrlBuilder.setPageIndex(0);
         onUpdateUrlBuilder();
+        if (mArchiveStatusCache != null) {
+            mArchiveStatusCache.clear();
+        }
         mHelper.refresh();
         setState(STATE_NORMAL);
     }
@@ -939,6 +951,11 @@ public final class GalleryListScene extends BaseScene
         if (null != mFabLayout) {
             removeAboveSnackView(mFabLayout);
             mFabLayout = null;
+        }
+
+        if (null != mArchiveStatusCache) {
+            mArchiveStatusCache.clear();
+            mArchiveStatusCache = null;
         }
 
         mAdapter = null;
@@ -1227,6 +1244,9 @@ public final class GalleryListScene extends BaseScene
 
             mUrlBuilder.setPageIndex(0);
             onUpdateUrlBuilder();
+            if (mArchiveStatusCache != null) {
+                mArchiveStatusCache.clear();
+            }
             mHelper.refresh();
             setState(STATE_NORMAL);
             return;
@@ -1484,6 +1504,9 @@ public final class GalleryListScene extends BaseScene
                 }
                 break;
             case 2: // Refresh
+                if (mArchiveStatusCache != null) {
+                    mArchiveStatusCache.clear();
+                }
                 mHelper.refresh();
                 break;
             case 3:
@@ -1812,6 +1835,9 @@ public final class GalleryListScene extends BaseScene
             mUrlBuilder.setKeyword(query);
         }
         onUpdateUrlBuilder();
+        if (mArchiveStatusCache != null) {
+            mArchiveStatusCache.clear();
+        }
         mHelper.refresh();
         setState(STATE_NORMAL);
     }
@@ -1973,6 +1999,9 @@ public final class GalleryListScene extends BaseScene
             mHelper.setEmptyString(emptyString);
 //            mHelper.onGetPageData(taskId, result.pages, result.nextPage, result.galleryInfoList);
             mHelper.onGetPageData(taskId, result, result.galleryInfoList);
+
+            // 触发归档状态查询（仅在远程下载模式）
+            queryArchiveStatus(result.galleryInfoList);
         }
     }
 
@@ -1981,6 +2010,72 @@ public final class GalleryListScene extends BaseScene
                 mHelper.isCurrentTask(taskId)) {
             mHelper.onGetException(taskId, e);
         }
+    }
+
+    /**
+     * 查询画廊归档状态（仅在远程下载模式下）
+     */
+    private void queryArchiveStatus(List<GalleryInfo> galleryInfoList) {
+        // 检查是否远程下载模式
+        if (!Settings.DOWNLOAD_MODE_REMOTE.equals(Settings.getDownloadMode())) {
+            return;
+        }
+
+        // 检查 NAS 配置
+        String address = Settings.getRemoteNasAddress();
+        String token = Settings.getRemoteApiToken();
+        if (address == null || address.isEmpty() || token == null || token.isEmpty()) {
+            return;
+        }
+
+        // 检查缓存和列表是否有效
+        if (mArchiveStatusCache == null || galleryInfoList == null || galleryInfoList.isEmpty()) {
+            return;
+        }
+
+        // 收集当前页所有 gid
+        List<Long> allGids = new ArrayList<>();
+        for (GalleryInfo gi : galleryInfoList) {
+            allGids.add(gi.gid);
+        }
+
+        // 过滤出未在 RemotePushInfo 中的 gid
+        List<Long> unpushedGids = new ArrayList<>();
+        for (Long gid : allGids) {
+            if (!EhDB.isRemotePushed(gid)) {
+                unpushedGids.add(gid);
+            }
+        }
+
+        if (unpushedGids.isEmpty()) {
+            return;
+        }
+
+        // 异步查询 NAS
+        executorService.submit(() -> {
+            try {
+                RemoteDownloadClient.BatchCheckResult result =
+                    RemoteDownloadClient.batchCheckArchivedBlocking(unpushedGids);
+
+                if (result instanceof RemoteDownloadClient.BatchCheckResult.Success) {
+                    Set<Long> existingGids = ((RemoteDownloadClient.BatchCheckResult.Success) result).getExistingGids();
+
+                    // 存入缓存
+                    mArchiveStatusCache.addAll(existingGids);
+
+                    // 通知适配器刷新（主线程）
+                    if (mAdapter != null && mRecyclerView != null) {
+                        mRecyclerView.post(() -> {
+                            if (mAdapter != null) {
+                                mAdapter.notifyDataSetChanged();
+                            }
+                        });
+                    }
+                }
+            } catch (Exception e) {
+                Log.d(TAG, "queryArchiveStatus failed: " + e.getMessage());
+            }
+        });
     }
 
     private abstract class UrlSuggestion extends SearchBar.Suggestion {
@@ -2069,8 +2164,8 @@ public final class GalleryListScene extends BaseScene
     private class GalleryListAdapter extends GalleryAdapterNew {
 
         public GalleryListAdapter(@NonNull LayoutInflater inflater,
-                                  @NonNull Resources resources, @NonNull RecyclerView recyclerView, int type) {
-            super(inflater, resources, recyclerView, type, true, executorService, showReadProgress);
+                                  @NonNull Resources resources, @NonNull RecyclerView recyclerView, int type, ArchiveStatusCache archiveStatusCache) {
+            super(inflater, resources, recyclerView, type, true, executorService, showReadProgress, archiveStatusCache);
         }
 
         @Override
