@@ -56,6 +56,7 @@ import java.lang.annotation.RetentionPolicy;
 import java.util.concurrent.ExecutorService;
 
 import com.hippo.ehviewer.spider.SpiderQueen;
+import com.hippo.ehviewer.client.ArchiveStatusCache;
 
 abstract class GalleryAdapterNew extends RecyclerView.Adapter<GalleryAdapterNew.GalleryHolder> {
 
@@ -83,13 +84,14 @@ abstract class GalleryAdapterNew extends RecyclerView.Adapter<GalleryAdapterNew.
     private OnThumbItemClickListener myOnThumbItemClickListener;
 
     private DownloadManager mDownloadManager;
+    private ArchiveStatusCache mArchiveStatusCache;
 
     private final ExecutorService executor;
     private final Handler handler = new Handler(Looper.getMainLooper());
 
 
     public GalleryAdapterNew(@NonNull LayoutInflater inflater, @NonNull Resources resources,
-                             @NonNull RecyclerView recyclerView, int type, boolean showFavourited, ExecutorService executor, boolean showReadProgress) {
+                             @NonNull RecyclerView recyclerView, int type, boolean showFavourited, ExecutorService executor, boolean showReadProgress, ArchiveStatusCache archiveStatusCache) {
         this.executor = executor;
         this.showReadProgress = showReadProgress;
         mInflater = inflater;
@@ -98,6 +100,7 @@ abstract class GalleryAdapterNew extends RecyclerView.Adapter<GalleryAdapterNew.
         mLayoutManager = new AutoStaggeredGridLayoutManager(0, StaggeredGridLayoutManager.VERTICAL);
         mPaddingTopSB = resources.getDimensionPixelOffset(R.dimen.gallery_padding_top_search_bar);
         mShowFavourite = showFavourited;
+        mArchiveStatusCache = archiveStatusCache;
 
         mRecyclerView.setAdapter(this);
         mRecyclerView.setLayoutManager(mLayoutManager);
@@ -264,11 +267,13 @@ abstract class GalleryAdapterNew extends RecyclerView.Adapter<GalleryAdapterNew.
                 }
                 holder.favourite.setVisibility((mShowFavourite && gi.favoriteSlot >= -1 && gi.favoriteSlot <= 10) ? View.VISIBLE : View.GONE);
                 boolean isLocalDownloaded = mDownloadManager.containDownloadInfo(gi.gid);
-                boolean isRemotePushed = !isLocalDownloaded && EhDB.isRemotePushed(gi.gid);
+                boolean isRemotePushed = EhDB.isRemotePushed(gi.gid);
+                boolean isArchived = mArchiveStatusCache != null && mArchiveStatusCache.contains(gi.gid);
+
                 if (isLocalDownloaded) {
                     holder.downloaded.setVisibility(View.VISIBLE);
-                    // Keep default download icon
-                } else if (isRemotePushed) {
+                    holder.downloaded.setImageResource(R.drawable.v_download_x24);
+                } else if (isRemotePushed || isArchived) {
                     holder.downloaded.setVisibility(View.VISIBLE);
                     holder.downloaded.setImageResource(R.drawable.v_cloud_primary_x24);
                 } else {
