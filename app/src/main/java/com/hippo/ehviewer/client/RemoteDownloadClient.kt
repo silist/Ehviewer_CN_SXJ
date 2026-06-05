@@ -258,10 +258,7 @@ object RemoteDownloadClient {
             put("gids", gidsArray)
         }
 
-        val bodyString = body.toString()
-        android.util.Log.d("RemoteDownloadClient", "Request body: $bodyString")
-
-        val requestBody = RequestBody.create(JSON_MEDIA_TYPE, bodyString)
+        val requestBody = RequestBody.create(JSON_MEDIA_TYPE, body.toString())
 
         val request = Request.Builder()
             .url(url)
@@ -274,8 +271,6 @@ object RemoteDownloadClient {
             val response = client.newCall(request).execute()
 
             if (!response.isSuccessful) {
-                val errorBody = response.body()?.string() ?: "no body"
-                android.util.Log.d("RemoteDownloadClient", "Error response: ${response.code()} body: $errorBody")
                 return@withContext when (response.code()) {
                     401 -> BatchCheckResult.Error("API Token 无效")
                     else -> BatchCheckResult.Error("请求失败: ${response.code()}")
