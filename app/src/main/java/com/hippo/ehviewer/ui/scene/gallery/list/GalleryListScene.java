@@ -337,9 +337,6 @@ public final class GalleryListScene extends BaseScene
         handleArgs(args);
         onUpdateUrlBuilder();
         if (null != mHelper) {
-            if (mArchiveStatusCache != null) {
-                mArchiveStatusCache.clear();
-            }
             mHelper.refresh();
         }
         setState(STATE_NORMAL);
@@ -424,6 +421,11 @@ public final class GalleryListScene extends BaseScene
             ehTags = EhTagDatabase.getInstance(context);
         }
 
+        // ArchiveStatusCache 在 Scene 级别初始化，避免 View 销毁时数据丢失
+        if (mArchiveStatusCache == null) {
+            mArchiveStatusCache = new ArchiveStatusCache();
+        }
+
 
         if (savedInstanceState == null) {
             onInit();
@@ -468,6 +470,10 @@ public final class GalleryListScene extends BaseScene
         mUrlBuilder = null;
         mDownloadManager.removeDownloadInfoListener(mDownloadInfoListener);
         mFavouriteStatusRouter.removeListener(mFavouriteStatusRouterListener);
+        if (mArchiveStatusCache != null) {
+            mArchiveStatusCache.clear();
+            mArchiveStatusCache = null;
+        }
         EventBus.getDefault().unregister(this);
     }
 
@@ -673,7 +679,6 @@ public final class GalleryListScene extends BaseScene
         contentLayout.setHelper(mHelper);
         contentLayout.getFastScroller().setOnDragHandlerListener(this);
 
-        mArchiveStatusCache = new ArchiveStatusCache();
         mAdapter = new GalleryListAdapter(inflater, resources,
                 mRecyclerView, Settings.getListMode(), mArchiveStatusCache);
 
@@ -860,9 +865,6 @@ public final class GalleryListScene extends BaseScene
 
         mUrlBuilder.setPageIndex(0);
         onUpdateUrlBuilder();
-        if (mArchiveStatusCache != null) {
-            mArchiveStatusCache.clear();
-        }
         mHelper.refresh();
         setState(STATE_NORMAL);
     }
@@ -951,11 +953,6 @@ public final class GalleryListScene extends BaseScene
         if (null != mFabLayout) {
             removeAboveSnackView(mFabLayout);
             mFabLayout = null;
-        }
-
-        if (null != mArchiveStatusCache) {
-            mArchiveStatusCache.clear();
-            mArchiveStatusCache = null;
         }
 
         mAdapter = null;
@@ -1244,9 +1241,6 @@ public final class GalleryListScene extends BaseScene
 
             mUrlBuilder.setPageIndex(0);
             onUpdateUrlBuilder();
-            if (mArchiveStatusCache != null) {
-                mArchiveStatusCache.clear();
-            }
             mHelper.refresh();
             setState(STATE_NORMAL);
             return;
@@ -1504,9 +1498,6 @@ public final class GalleryListScene extends BaseScene
                 }
                 break;
             case 2: // Refresh
-                if (mArchiveStatusCache != null) {
-                    mArchiveStatusCache.clear();
-                }
                 mHelper.refresh();
                 break;
             case 3:
@@ -1835,9 +1826,6 @@ public final class GalleryListScene extends BaseScene
             mUrlBuilder.setKeyword(query);
         }
         onUpdateUrlBuilder();
-        if (mArchiveStatusCache != null) {
-            mArchiveStatusCache.clear();
-        }
         mHelper.refresh();
         setState(STATE_NORMAL);
     }
@@ -2012,12 +2000,19 @@ public final class GalleryListScene extends BaseScene
         }
     }
 
+    private static final String TAG_ARCHIVE = "ArchiveStatus";
+
     /**
      * 查询画廊归档状态（仅在远程下载模式下）
      */
     private void queryArchiveStatus(List<GalleryInfo> galleryInfoList) {
+        int listSize = galleryInfoList != null ? galleryInfoList.size() : 0;
+        Log.d(TAG_ARCHIVE, "queryArchiveStatus START: listSize=" + listSize);
+
         // 检查是否远程下载模式
-        if (!Settings.DOWNLOAD_MODE_REMOTE.equals(Settings.getDownloadMode())) {
+        String downloadMode = Settings.getDownloadMode();
+        if (!Settings.DOWNLOAD_MODE_REMOTE.equals(downloadMode)) {
+            Log.d(TAG_ARCHIVE, "SKIP: not remote mode (" + downloadMode + ")");
             return;
         }
 
@@ -2025,11 +2020,17 @@ public final class GalleryListScene extends BaseScene
         String address = Settings.getRemoteNasAddress();
         String token = Settings.getRemoteApiToken();
         if (address == null || address.isEmpty() || token == null || token.isEmpty()) {
+            Log.d(TAG_ARCHIVE, "SKIP: NAS config empty");
             return;
         }
 
         // 检查缓存和列表是否有效
-        if (mArchiveStatusCache == null || galleryInfoList == null || galleryInfoList.isEmpty()) {
+        if (mArchiveStatusCache == null) {
+            Log.d(TAG_ARCHIVE, "SKIP: cache is null");
+            return;
+        }
+        if (galleryInfoList == null || galleryInfoList.isEmpty()) {
+            Log.d(TAG_ARCHIVE, "SKIP: list empty");
             return;
         }
 
@@ -2047,18 +2048,25 @@ public final class GalleryListScene extends BaseScene
             }
         }
 
+        Log.d(TAG_ARCHIVE, "allGids=" + allGids.size() + ", unpushedGids=" + unpushedGids.size());
         if (unpushedGids.isEmpty()) {
+            Log.d(TAG_ARCHIVE, "SKIP: all gids already pushed");
             return;
         }
 
+        Log.d(TAG_ARCHIVE, "EXECUTING query for " + unpushedGids.size() + " gids");
+
         // 异步查询 NAS
+        final List<Long> gidsToQuery = unpushedGids;
         executorService.submit(() -> {
             try {
+                Log.d(TAG_ARCHIVE, "NAS query starting for gids: " + gidsToQuery);
                 RemoteDownloadClient.BatchCheckResult result =
-                    RemoteDownloadClient.batchCheckArchivedBlocking(unpushedGids);
+                    RemoteDownloadClient.batchCheckArchivedBlocking(gidsToQuery);
 
                 if (result instanceof RemoteDownloadClient.BatchCheckResult.Success) {
                     Set<Long> existingGids = ((RemoteDownloadClient.BatchCheckResult.Success) result).getExistingGids();
+                    Log.d(TAG_ARCHIVE, "NAS SUCCESS: received " + existingGids.size() + " archived gids: " + existingGids);
 
                     // 存入缓存
                     mArchiveStatusCache.addAll(existingGids);
@@ -2067,13 +2075,16 @@ public final class GalleryListScene extends BaseScene
                     if (mAdapter != null && mRecyclerView != null) {
                         mRecyclerView.post(() -> {
                             if (mAdapter != null) {
+                                Log.d(TAG_ARCHIVE, "notifyDataSetChanged called");
                                 mAdapter.notifyDataSetChanged();
                             }
                         });
                     }
+                } else {
+                    Log.e(TAG_ARCHIVE, "NAS ERROR: " + ((RemoteDownloadClient.BatchCheckResult.Error) result).getMessage());
                 }
             } catch (Exception e) {
-                Log.d(TAG, "queryArchiveStatus failed: " + e.getMessage());
+                Log.e(TAG_ARCHIVE, "queryArchiveStatus exception: " + e.getMessage(), e);
             }
         });
     }
