@@ -95,6 +95,8 @@ import com.hippo.ehviewer.dao.DownloadInfo;
 import com.hippo.ehviewer.dao.QuickSearch;
 import com.hippo.ehviewer.download.DownloadManager;
 import com.hippo.ehviewer.event.SomethingNeedRefresh;
+import com.hippo.ehviewer.client.ArchiveStatusCache;
+import com.hippo.ehviewer.client.RemoteDownloadClient;
 import com.hippo.ehviewer.ui.CommonOperations;
 import com.hippo.ehviewer.ui.GalleryActivity;
 import com.hippo.ehviewer.ui.MainActivity;
@@ -138,6 +140,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.ExecutorService;
 
 public final class GalleryListScene extends BaseScene
@@ -296,6 +299,8 @@ public final class GalleryListScene extends BaseScene
     private DownloadManager.DownloadInfoListener mDownloadInfoListener;
     private FavouriteStatusRouter mFavouriteStatusRouter;
     private FavouriteStatusRouter.Listener mFavouriteStatusRouterListener;
+    @Nullable
+    private ArchiveStatusCache mArchiveStatusCache;
 
     @Override
     public int getNavCheckedItem() {
@@ -416,6 +421,11 @@ public final class GalleryListScene extends BaseScene
             ehTags = EhTagDatabase.getInstance(context);
         }
 
+        // ArchiveStatusCache 在 Scene 级别初始化，避免 View 销毁时数据丢失
+        if (mArchiveStatusCache == null) {
+            mArchiveStatusCache = new ArchiveStatusCache();
+        }
+
 
         if (savedInstanceState == null) {
             onInit();
@@ -460,6 +470,10 @@ public final class GalleryListScene extends BaseScene
         mUrlBuilder = null;
         mDownloadManager.removeDownloadInfoListener(mDownloadInfoListener);
         mFavouriteStatusRouter.removeListener(mFavouriteStatusRouterListener);
+        if (mArchiveStatusCache != null) {
+            mArchiveStatusCache.clear();
+            mArchiveStatusCache = null;
+        }
         EventBus.getDefault().unregister(this);
     }
 
@@ -666,7 +680,7 @@ public final class GalleryListScene extends BaseScene
         contentLayout.getFastScroller().setOnDragHandlerListener(this);
 
         mAdapter = new GalleryListAdapter(inflater, resources,
-                mRecyclerView, Settings.getListMode());
+                mRecyclerView, Settings.getListMode(), mArchiveStatusCache);
 
         mAdapter.setThumbItemClickListener(this::onThumbItemClick);
         mRecyclerView.setSelector(Ripple.generateRippleDrawable(context, !AttrResources.getAttrBoolean(context, androidx.appcompat.R.attr.isLightTheme), new ColorDrawable(Color.TRANSPARENT)));
@@ -1973,6 +1987,9 @@ public final class GalleryListScene extends BaseScene
             mHelper.setEmptyString(emptyString);
 //            mHelper.onGetPageData(taskId, result.pages, result.nextPage, result.galleryInfoList);
             mHelper.onGetPageData(taskId, result, result.galleryInfoList);
+
+            // 触发归档状态查询（仅在远程下载模式）
+            queryArchiveStatus(result.galleryInfoList);
         }
     }
 
@@ -1981,6 +1998,95 @@ public final class GalleryListScene extends BaseScene
                 mHelper.isCurrentTask(taskId)) {
             mHelper.onGetException(taskId, e);
         }
+    }
+
+    private static final String TAG_ARCHIVE = "ArchiveStatus";
+
+    /**
+     * 查询画廊归档状态（仅在远程下载模式下）
+     */
+    private void queryArchiveStatus(List<GalleryInfo> galleryInfoList) {
+        int listSize = galleryInfoList != null ? galleryInfoList.size() : 0;
+        Log.d(TAG_ARCHIVE, "queryArchiveStatus START: listSize=" + listSize);
+
+        // 检查是否远程下载模式
+        String downloadMode = Settings.getDownloadMode();
+        if (!Settings.DOWNLOAD_MODE_REMOTE.equals(downloadMode)) {
+            Log.d(TAG_ARCHIVE, "SKIP: not remote mode (" + downloadMode + ")");
+            return;
+        }
+
+        // 检查 NAS 配置
+        String address = Settings.getRemoteNasAddress();
+        String token = Settings.getRemoteApiToken();
+        if (address == null || address.isEmpty() || token == null || token.isEmpty()) {
+            Log.d(TAG_ARCHIVE, "SKIP: NAS config empty");
+            return;
+        }
+
+        // 检查缓存和列表是否有效
+        if (mArchiveStatusCache == null) {
+            Log.d(TAG_ARCHIVE, "SKIP: cache is null");
+            return;
+        }
+        if (galleryInfoList == null || galleryInfoList.isEmpty()) {
+            Log.d(TAG_ARCHIVE, "SKIP: list empty");
+            return;
+        }
+
+        // 收集当前页所有 gid
+        List<Long> allGids = new ArrayList<>();
+        for (GalleryInfo gi : galleryInfoList) {
+            allGids.add(gi.gid);
+        }
+
+        // 过滤出未在 RemotePushInfo 中的 gid
+        List<Long> unpushedGids = new ArrayList<>();
+        for (Long gid : allGids) {
+            if (!EhDB.isRemotePushed(gid)) {
+                unpushedGids.add(gid);
+            }
+        }
+
+        Log.d(TAG_ARCHIVE, "allGids=" + allGids.size() + ", unpushedGids=" + unpushedGids.size());
+        if (unpushedGids.isEmpty()) {
+            Log.d(TAG_ARCHIVE, "SKIP: all gids already pushed");
+            return;
+        }
+
+        Log.d(TAG_ARCHIVE, "EXECUTING query for " + unpushedGids.size() + " gids");
+
+        // 异步查询 NAS
+        final List<Long> gidsToQuery = unpushedGids;
+        executorService.submit(() -> {
+            try {
+                Log.d(TAG_ARCHIVE, "NAS query starting for gids: " + gidsToQuery);
+                RemoteDownloadClient.BatchCheckResult result =
+                    RemoteDownloadClient.batchCheckArchivedBlocking(gidsToQuery);
+
+                if (result instanceof RemoteDownloadClient.BatchCheckResult.Success) {
+                    Set<Long> existingGids = ((RemoteDownloadClient.BatchCheckResult.Success) result).getExistingGids();
+                    Log.d(TAG_ARCHIVE, "NAS SUCCESS: received " + existingGids.size() + " archived gids: " + existingGids);
+
+                    // 存入缓存
+                    mArchiveStatusCache.addAll(existingGids);
+
+                    // 通知适配器刷新（主线程）
+                    if (mAdapter != null && mRecyclerView != null) {
+                        mRecyclerView.post(() -> {
+                            if (mAdapter != null) {
+                                Log.d(TAG_ARCHIVE, "notifyDataSetChanged called");
+                                mAdapter.notifyDataSetChanged();
+                            }
+                        });
+                    }
+                } else {
+                    Log.e(TAG_ARCHIVE, "NAS ERROR: " + ((RemoteDownloadClient.BatchCheckResult.Error) result).getMessage());
+                }
+            } catch (Exception e) {
+                Log.e(TAG_ARCHIVE, "queryArchiveStatus exception: " + e.getMessage(), e);
+            }
+        });
     }
 
     private abstract class UrlSuggestion extends SearchBar.Suggestion {
@@ -2069,8 +2175,8 @@ public final class GalleryListScene extends BaseScene
     private class GalleryListAdapter extends GalleryAdapterNew {
 
         public GalleryListAdapter(@NonNull LayoutInflater inflater,
-                                  @NonNull Resources resources, @NonNull RecyclerView recyclerView, int type) {
-            super(inflater, resources, recyclerView, type, true, executorService, showReadProgress);
+                                  @NonNull Resources resources, @NonNull RecyclerView recyclerView, int type, ArchiveStatusCache archiveStatusCache) {
+            super(inflater, resources, recyclerView, type, true, executorService, showReadProgress, archiveStatusCache);
         }
 
         @Override
